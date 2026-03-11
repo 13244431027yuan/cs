@@ -3,525 +3,225 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>代码预览 + 分析 + 高亮 + 流程</title>
+    <title>代码预览 · GitHub API 增强</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29/themes/prism-tomorrow.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29/plugins/line-numbers/prism-line-numbers.min.css">
     <style>
-        :root { --primary: #0366d6; --bg: #fafafa; --code-bg: #1e1e1e; --success: #28a745; --warning: #f0ad4e; }
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 1100px; margin: 0 auto; padding: 1rem; background: var(--bg); color: #24292e; }
+        :root { --primary: #0366d6; --bg: #fafafa; --code-bg: #1e1e1e; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 950px; margin: 0 auto; padding: 1rem; background: var(--bg); color: #24292e; }
         h2 { margin: 0 0 1rem; }
         .header { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
         input { flex: 1; min-width: 200px; padding: 9px 12px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; }
         button { padding: 9px 18px; background: var(--primary); color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
         button:hover { background: #0255b3; }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
-        #status { margin: 8px 0; min-height: 1.2em; font-size: 14px; color: #d73a49; }
+        #status { margin: 8px 0; min-height: 1.2em; font-size: 14px; }
+        .status-ok { color: #28a745; } .status-err { color: #d73a49; }
         
-        /* 面板通用 */
-        .panel { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 12px; margin-bottom: 1rem; display: none; }
-        .panel.show { display: block; animation: slideDown 0.2s ease; }
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-        .panel-title { font-weight: 600; margin-bottom: 10px; color: #24292e; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* 统计网格 */
+        .analysis { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 12px; margin-bottom: 1rem; display: none; }
+        .analysis.show { display: block; }
         .analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; font-size: 13px; }
         .analysis-item { background: #f6f8fa; padding: 10px; border-radius: 6px; text-align: center; border: 1px solid #eee; }
         .analysis-item .label { color: #666; display: block; font-size: 11px; margin-bottom: 4px; }
         .analysis-item .value { font-weight: 600; color: #1a7f37; }
         .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-        .tag { background: #e1ecf4; color: #39739d; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .tag { background: #e1ecf4; color: #39739d; padding: 3px 10px; border-radius: 12px; font-size: 11px; }
+        .tag.api { background: #fff5b1; color: #735c0f; }
         
-        /* 函数流程面板 */
-        .flow-container { display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; }
-        @media (max-width: 768px) { .flow-container { grid-template-columns: 1fr; } }
-        
-        /* 函数列表 */
-        .func-list { max-height: 400px; overflow-y: auto; border: 1px solid #e1e4e8; border-radius: 6px; }
-        .func-item { padding: 10px 12px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 13px; }
-        .func-item:hover { background: #f6f8fa; }
-        .func-item.active { background: #e1ecf4; border-left: 3px solid var(--primary); }
-        .func-item .name { font-weight: 600; color: #0366d6; }
-        .func-item .meta { font-size: 11px; color: #666; margin-top: 4px; }
-        .func-item .complexity { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; margin-left: 6px; }
-        .complexity.low { background: #d4edda; color: #155724; }
-        .complexity.medium { background: #fff3cd; color: #856404; }
-        .complexity.high { background: #f8d7da; color: #721c24; }
-        
-        /* 函数详情 */
-        .func-detail { background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; padding: 12px; }
-        .func-detail h4 { margin: 0 0 10px; color: #0366d6; }
-        .func-detail .info { font-size: 12px; color: #666; margin-bottom: 10px; }
-        .func-detail .info span { margin-right: 15px; }
-        .call-graph { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 12px; max-height: 200px; overflow: auto; }
-        .call-graph .call { padding: 2px 0; }
-        .call-graph .call::before { content: '└─ '; color: #999; }
-        .call-graph .external { color: #d73a49; }
-        .call-graph .internal { color: #0366d6; }
-        
-        /* 代码区域 */
         .code-box { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid #e1e4e8; }
         .code-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #2d2d2d; color: #ccc; font-size: 12px; }
         .code-lang { font-weight: 600; text-transform: uppercase; }
         .code-actions { display: flex; gap: 6px; }
         .code-actions button { padding: 3px 10px; font-size: 11px; background: #444; }
-        .code-actions button:hover { background: #555; }
-        pre.line-numbers { margin: 0 !important; border-radius: 0 !important; background: var(--code-bg) !important; max-height: 500px; overflow: auto; }
-        pre.line-numbers code { font-family: ui-monospace, SFMono-Regular, 'Cascadia Code', monospace; font-size: 13px; }
-        #copyBtn.copied { background: var(--success) !important; }
-        
+        pre.line-numbers { margin: 0 !important; background: var(--code-bg) !important; }
+        pre.line-numbers code { font-family: ui-monospace, monospace; font-size: 13px; }
+        #copyBtn.copied { background: #28a745 !important; }
         .footer { margin-top: 1.5rem; font-size: 12px; color: #666; text-align: center; }
         .footer code { background: #eee; padding: 2px 6px; border-radius: 3px; }
         .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ccc; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        
-        /* 流程可视化 */
-        .flow-viz { margin-top: 10px; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 6px; }
-        .flow-node { display: inline-block; padding: 4px 10px; margin: 3px; background: #e1ecf4; border-radius: 4px; font-size: 11px; }
-        .flow-arrow { color: #666; margin: 0 5px; }
     </style>
 </head>
 <body>
-    <h2>✨ 代码预览 · 分析 · 高亮 · 流程</h2>
-    
+    <h2>✨ 代码预览 · GitHub API 增强</h2>
     <div class="header">
-        <input type="text" id="urlInput" placeholder="输入 raw 代码链接，或等待 ?url= 参数自动加载">
+        <input type="text" id="urlInput" placeholder="GitHub 链接或 Raw 链接">
         <button id="loadBtn" onclick="fetchCode()">🔍 加载</button>
     </div>
     <div id="status"></div>
     
-    <!-- 基础统计 -->
-    <div class="panel" id="statsPanel">
-        <div class="panel-title">📊 基础统计</div>
+    <div class="analysis" id="analysisPanel">
         <div class="analysis-grid">
             <div class="analysis-item"><span class="label">📏 行数</span><span class="value" id="statLines">-</span></div>
-            <div class="analysis-item"><span class="label">🔤 字符</span><span class="value" id="statChars">-</span></div>
             <div class="analysis-item"><span class="label">💾 大小</span><span class="value" id="statSize">-</span></div>
             <div class="analysis-item"><span class="label">⚙️ 函数</span><span class="value" id="statFuncs">-</span></div>
-            <div class="analysis-item"><span class="label">💬 注释</span><span class="value" id="statComments">-</span></div>
             <div class="analysis-item"><span class="label">🔗 依赖</span><span class="value" id="statImports">-</span></div>
         </div>
         <div class="tags" id="tagList"></div>
     </div>
     
-    <!-- 函数流程分析 -->
-    <div class="panel" id="flowPanel">
-        <div class="panel-title">
-            🔄 函数流程分析
-            <button onclick="toggleFlow()" style="padding:4px 10px;font-size:11px;">👁️ 显示/隐藏</button>
-        </div>
-        <div class="flow-container">
-            <div class="func-list" id="funcList"></div>
-            <div class="func-detail" id="funcDetail">
-                <h4 id="detailName">选择一个函数查看详情</h4>
-                <div class="info" id="detailInfo"></div>
-                <div><strong>调用其他函数:</strong></div>
-                <div class="call-graph" id="callGraph"></div>
-                <div style="margin-top:10px;"><strong>被谁调用:</strong></div>
-                <div class="call-graph" id="calledBy"></div>
-            </div>
-        </div>
-        <div class="flow-viz" id="flowViz" style="display:none;">
-            <strong>调用链可视化:</strong>
-            <div id="flowDiagram"></div>
-        </div>
-    </div>
-    
-    <!-- 代码显示 -->
     <div class="code-box" id="codeBox" style="display:none;">
         <div class="code-header">
-            <span class="code-lang" id="codeLang">JAVASCRIPT</span>
+            <span class="code-lang" id="codeLang">TXT</span>
             <div class="code-actions">
                 <button onclick="toggleWrap()">🔁 换行</button>
-                <button onclick="scrollToFunc()">📍 跳转到函数</button>
                 <button id="copyBtn" onclick="copyCode()">📋 复制</button>
             </div>
         </div>
-        <pre class="line-numbers" id="codePre"><code id="codeDisplay"></code></pre>
+        <pre class="line-numbers"><code id="codeDisplay"></code></pre>
     </div>
     
     <div class="footer">
-        用法：<code>?url=https://raw.githubusercontent.com/user/repo/main/file.js</code><br>
-        支持语言：JS/TS/Python (流程分析主要支持 JS/TS/Python)
+        支持 GitHub Blob/Raw 链接自动识别 API<br>
+        用法：<code>?url=https://github.com/user/repo/blob/main/file.js</code>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/prism.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/plugins/autoloader/prism-autoloader.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/plugins/line-numbers/prism-line-numbers.min.js"></script>
-    
     <script>
-        const LANG_MAP = {
-            js: 'javascript', ts: 'typescript', jsx: 'jsx', tsx: 'tsx',
-            py: 'python', html: 'html', css: 'css', json: 'json',
-            md: 'markdown', yml: 'yaml', sql: 'sql', go: 'go', rs: 'rust'
-        };
-
-        let globalFunctions = []; // 存储所有函数信息
-        let currentLang = '';
-        let currentCode = '';
-
-        function getUrlParam(name) {
-            return new URLSearchParams(window.location.search).get(name);
-        }
-
-        function getLanguage(url) {
+        const LANG_MAP = { js:'javascript', ts:'typescript', py:'python', html:'html', css:'css', json:'json', md:'markdown', yml:'yaml', sh:'bash', sql:'sql', go:'go', rs:'rust', java:'java', php:'php' };
+        
+        function getUrlParam(name) { return new URLSearchParams(window.location.search).get(name); }
+        function getLangFromUrl(url) {
             const ext = (url.split('.').pop() || '').toLowerCase().split('?')[0];
             return LANG_MAP[ext] || 'plaintext';
         }
 
-        // 📊 基础统计
-        function analyzeCode(code, lang) {
-            const lines = code.split('\n');
-            return {
-                lines: lines.length,
-                chars: code.length,
-                size: formatSize(new Blob([code]).size),
-                functions: globalFunctions.length,
-                comments: calcComments(lines, lang),
-                imports: extractImports(code, lang)
-            };
+        // 🍅 GitHub URL 解析
+        function parseGitHubUrl(url) {
+            // 匹配 github.com/user/repo/blob/branch/path 或 raw.githubusercontent.com
+            const blobRegex = /github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)/;
+            const rawRegex = /raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)/;
+            let m = url.match(blobRegex);
+            if (m) return { user: m[1], repo: m[2], branch: m[3], path: m[4], type: 'blob' };
+            m = url.match(rawRegex);
+            if (m) return { user: m[1], repo: m[2], branch: m[3], path: m[4], type: 'raw' };
+            return null;
         }
 
-        function calcComments(lines, lang) {
-            let count = 0;
+        // 📊 分析
+        function analyzeCode(code, lang, apiSize) {
+            const lines = code.split('\n');
+            const size = apiSize ? formatSize(apiSize) : formatSize(new Blob([code]).size);
+            let funcs = 0, imports = 0;
             if (['javascript','typescript'].includes(lang)) {
-                count = lines.filter(l => /^\s*\/\/|^\s*\/\*|^\s*\*/.test(l)).length;
+                funcs = (code.match(/\b(function\s+\w+|(\w+)\s*[:=]\s*(async\s*)?\(|async\s+function)/g) || []).length;
+                imports = [...new Set(code.match(/(?:import|require)\s*['"]([^'"]+)['"]/g) || [])].length;
             } else if (lang === 'python') {
-                count = lines.filter(l => /^\s*#/.test(l)).length;
+                funcs = (code.match(/^\s*def\s+\w+/gm) || []).length;
             }
-            return lines.length ? Math.round((count / lines.length) * 100) + '%' : '0%';
+            return { lines: lines.length, size, funcs, imports };
         }
+        function formatSize(b) { return b < 1024 ? b+' B' : b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(2)+' MB'; }
 
-        function extractImports(code, lang) {
-            if (['javascript','typescript'].includes(lang)) {
-                return [...new Set(code.match(/(?:import|from|require)\s*['"]([^'"]+)['"]/g)?.map(m => m.match(/['"]([^'"]+)['"]/)[1]) || [])];
-            } else if (lang === 'python') {
-                return [...new Set(code.match(/^\s*(import|from)\s+[\w.]+/gm)?.map(m => m.trim()) || [])];
-            }
-            return [];
-        }
-
-        function formatSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
-            return (bytes/1024/1024).toFixed(2) + ' MB';
-        }
-
-        // 🔄 函数流程分析（核心）
-        function analyzeFunctions(code, lang) {
-            const functions = [];
-            const lines = code.split('\n');
-
-            if (['javascript','typescript','jsx','tsx'].includes(lang)) {
-                // JS/TS 函数匹配
-                const patterns = [
-                    { regex: /function\s+(\w+)\s*\(([^)]*)\)/g, type: 'function' },
-                    { regex: /(\w+)\s*[:=]\s*(async\s*)?function\s*\(([^)]*)\)/g, type: 'method' },
-                    { regex: /(\w+)\s*[:=]\s*(async\s*)?\(([^)]*)\)\s*=>/g, type: 'arrow' },
-                    { regex: /async\s+function\s+(\w+)\s*\(([^)]*)\)/g, type: 'async' },
-                    { regex: /class\s+(\w+)/g, type: 'class' }
-                ];
-
-                patterns.forEach(({ regex, type }) => {
-                    let match;
-                    while ((match = regex.exec(code)) !== null) {
-                        const name = match[1];
-                        const params = match[2] || match[3] || '';
-                        const startIdx = match.index;
-                        const startLine = code.substring(0, startIdx).split('\n').length;
-                        
-                        // 估算函数结束行（简单启发式）
-                        let endLine = startLine;
-                        let braceCount = 0;
-                        let started = false;
-                        for (let i = startLine - 1; i < lines.length && i < startLine + 200; i++) {
-                            const line = lines[i];
-                            braceCount += (line.match(/{/g) || []).length;
-                            braceCount -= (line.match(/}/g) || []).length;
-                            if (line.includes('{')) started = true;
-                            if (started && braceCount === 0) { endLine = i + 1; break; }
-                        }
-
-                        functions.push({
-                            name, type, params: params.trim(),
-                            startLine, endLine,
-                            lineCount: endLine - startLine + 1,
-                            complexity: calcComplexity(code, startIdx, endLine)
-                        });
-                    }
-                });
-            } else if (lang === 'python') {
-                // Python 函数匹配
-                const pattern = /^(async\s+)?def\s+(\w+)\s*\(([^)]*)\)/gm;
-                let match;
-                while ((match = pattern.exec(code)) !== null) {
-                    const name = match[2];
-                    const params = match[3] || '';
-                    const startLine = code.substring(0, match.index).split('\n').length;
-                    
-                    // 估算结束行（通过缩进）
-                    let endLine = startLine;
-                    const baseIndent = lines[startLine - 1]?.search(/\S/) || 0;
-                    for (let i = startLine; i < lines.length && i < startLine + 200; i++) {
-                        const indent = lines[i]?.search(/\S/) || 0;
-                        if (indent <= baseIndent && lines[i]?.trim() && !lines[i]?.trim().startsWith('#')) {
-                            endLine = i; break;
-                        }
-                        endLine = i + 1;
-                    }
-
-                    functions.push({
-                        name, type: match[1] ? 'async' : 'function', params: params.trim(),
-                        startLine, endLine,
-                        lineCount: endLine - startLine + 1,
-                        complexity: calcComplexity(code, match.index, endLine)
-                    });
-                }
-            }
-
-            // 分析调用关系
-            functions.forEach(func => {
-                func.calls = findFunctionCalls(code, func, functions);
-                func.calledBy = functions.filter(f => f.calls.includes(func.name)).map(f => f.name);
-            });
-
-            return functions.sort((a, b) => a.startLine - b.startLine);
-        }
-
-        // 计算圈复杂度（简化版）
-        function calcComplexity(code, startIdx, endLine) {
-            const lines = code.split('\n');
-            const funcCode = lines.slice(startIdx - 1, endLine).join('\n');
-            const keywords = (funcCode.match(/\b(if|else|for|while|switch|case|catch|\?\s*:|&&|\|\|)\b/g) || []).length;
-            if (keywords <= 3) return 'low';
-            if (keywords <= 8) return 'medium';
-            return 'high';
-        }
-
-        // 查找函数内部调用的其他函数
-        function findFunctionCalls(code, func, allFunctions) {
-            const lines = code.split('\n');
-            const funcCode = lines.slice(func.startLine - 1, func.endLine).join('\n');
-            const calls = [];
-            
-            allFunctions.forEach(target => {
-                if (target.name !== func.name && new RegExp(`\\b${target.name}\\s*\\(`).test(funcCode)) {
-                    calls.push(target.name);
-                }
-            });
-            
-            // 检测外部调用
-            const externalCalls = (funcCode.match(/\b[a-zA-Z_]\w*\s*\(/g) || [])
-                .map(m => m.replace(/\s*\(/, ''))
-                .filter(name => !allFunctions.find(f => f.name === name) && !['if','for','while','switch','return','console','log','alert','print','len','range'].includes(name));
-            
-            func.externalCalls = [...new Set(externalCalls)].slice(0, 10);
-            return calls;
-        }
-
-        // 渲染统计
-        function renderStats(stats, lang) {
+        function renderAnalysis(stats, lang, isApi) {
             document.getElementById('statLines').textContent = stats.lines.toLocaleString();
-            document.getElementById('statChars').textContent = stats.chars.toLocaleString();
             document.getElementById('statSize').textContent = stats.size;
-            document.getElementById('statFuncs').textContent = stats.functions;
-            document.getElementById('statComments').textContent = stats.comments;
-            document.getElementById('statImports').textContent = stats.imports.length || '-';
+            document.getElementById('statFuncs').textContent = stats.funcs || '-';
+            document.getElementById('statImports').textContent = stats.imports || '-';
             document.getElementById('codeLang').textContent = lang.toUpperCase();
-            
-            const tags = [
-                `<span class="tag">${lang.toUpperCase()}</span>`,
-                `<span class="tag">${stats.lines > 1000 ? '📚 大文件' : stats.lines > 300 ? '📄 中等' : '📝 轻量'}</span>`
-            ];
-            if (stats.functions > 20) tags.push('<span class="tag">⚙️ 高复杂度</span>');
+            const tags = [`<span class="tag">${lang.toUpperCase()}</span>`];
+            if (isApi) tags.push('<span class="tag api">🍅 GitHub API</span>');
             document.getElementById('tagList').innerHTML = tags.join('');
-            document.getElementById('statsPanel').classList.add('show');
+            document.getElementById('analysisPanel').classList.add('show');
         }
 
-        // 渲染函数列表
-        function renderFunctionList(functions) {
-            const list = document.getElementById('funcList');
-            if (functions.length === 0) {
-                list.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">未检测到函数</div>';
-                return;
-            }
-            list.innerHTML = functions.map((f, i) => `
-                <div class="func-item" onclick="selectFunction(${i})" data-idx="${i}">
-                    <div class="name">${f.name} <span class="complexity ${f.complexity}">${f.complexity}</span></div>
-                    <div class="meta">${f.type} | ${f.lineCount} 行 | 第 ${f.startLine} 行</div>
-                </div>
-            `).join('');
-            document.getElementById('flowPanel').classList.add('show');
-        }
-
-        // 选择函数查看详情
-        function selectFunction(idx) {
-            const func = globalFunctions[idx];
-            document.querySelectorAll('.func-item').forEach((el, i) => {
-                el.classList.toggle('active', i === idx);
-            });
-            
-            document.getElementById('detailName').textContent = func.name;
-            document.getElementById('detailInfo').innerHTML = `
-                <span>类型：<b>${func.type}</b></span>
-                <span>参数：<b>${func.params || '无'}</b></span>
-                <span>行数：<b>${func.lineCount}</b></span>
-                <span>位置：<b>L${func.startLine}-L${func.endLine}</b></span>
-                <span>复杂度：<b class="${func.complexity}">${func.complexity}</b></span>
-            `;
-            
-            // 调用其他函数
-            const callsHtml = func.calls.length ? 
-                func.calls.map(c => `<div class="call internal">${c}</div>`).join('') +
-                (func.externalCalls?.length ? func.externalCalls.map(c => `<div class="call external">${c} (外部)</div>`).join('') : '') :
-                '<div style="color:#999;">无</div>';
-            document.getElementById('callGraph').innerHTML = callsHtml;
-            
-            // 被谁调用
-            const calledByHtml = func.calledBy.length ?
-                func.calledBy.map(c => `<div class="call internal">${c}</div>`).join('') :
-                '<div style="color:#999;">无（可能是入口函数）</div>';
-            document.getElementById('calledBy').innerHTML = calledByHtml;
-            
-            // 可视化
-            renderFlowDiagram(func);
-        }
-
-        // 渲染调用流程图
-        function renderFlowDiagram(func) {
-            const viz = document.getElementById('flowViz');
-            const diagram = document.getElementById('flowDiagram');
-            
-            if (func.calls.length === 0 && func.calledBy.length === 0) {
-                viz.style.display = 'none';
-                return;
-            }
-            
-            viz.style.display = 'block';
-            const nodes = [];
-            
-            // 调用者 → 当前 → 被调用
-            if (func.calledBy.length) {
-                nodes.push(...func.calledBy.map(n => `<span class="flow-node" style="background:#fff3cd;">${n}</span>`));
-                nodes.push('<span class="flow-arrow">→</span>');
-            }
-            
-            nodes.push(`<span class="flow-node" style="background:#d4edda;font-weight:600;">${func.name}</span>`);
-            
-            if (func.calls.length) {
-                nodes.push('<span class="flow-arrow">→</span>');
-                nodes.push(...func.calls.map(n => `<span class="flow-node">${n}</span>`));
-            }
-            
-            diagram.innerHTML = nodes.join('');
-        }
-
-        function toggleFlow() {
-            const panel = document.getElementById('flowPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
-
-        // 高亮代码
         function highlightCode(code, lang) {
-            const codeEl = document.getElementById('codeDisplay');
-            codeEl.className = `language-${lang}`;
-            codeEl.textContent = code;
-            if (window.Prism?.plugins?.autoloader) {
-                Prism.plugins.autoloader.loadLanguages([lang], () => Prism.highlightElement(codeEl));
-            } else if (window.Prism) {
-                Prism.highlightElement(codeEl);
+            const el = document.getElementById('codeDisplay');
+            el.className = `language-${lang}`;
+            el.textContent = code;
+            if (window.Prism) {
+                Prism.plugins.autoloader.loadLanguages([lang], () => Prism.highlightElement(el));
             }
         }
 
-        // 跳转到函数
-        function scrollToFunc() {
-            const active = document.querySelector('.func-item.active');
-            if (active) {
-                const idx = parseInt(active.dataset.idx);
-                const func = globalFunctions[idx];
-                const pre = document.getElementById('codePre');
-                const lineHeight = 20; // 估算
-                pre.scrollTop = (func.startLine - 1) * lineHeight - 100;
-                
-                // 临时高亮行
-                const codeEl = document.getElementById('codeDisplay');
-                const lines = codeEl.innerHTML.split('\n');
-                lines[func.startLine - 1] = `<span style="background:rgba(255,255,0,0.3)">${lines[func.startLine - 1]}</span>`;
-                codeEl.innerHTML = lines.join('\n');
-                setTimeout(() => highlightCode(currentCode, currentLang), 2000);
-            }
+        // 🔄 解码 Base64 (支持 UTF-8)
+        function b64DecodeUnicode(str) {
+            return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
         }
 
-        async function fetchCode(targetUrl) {
-            const url = targetUrl || document.getElementById('urlInput').value.trim();
+        async function fetchCode() {
+            const url = document.getElementById('urlInput').value.trim();
             const status = document.getElementById('status');
             const loadBtn = document.getElementById('loadBtn');
+            const codeBox = document.getElementById('codeBox');
             
-            if (!url) { status.textContent = '👉 请输入代码链接'; return; }
+            if (!url) { status.textContent = '👉 请输入链接'; status.className = 'status-err'; return; }
             
             status.innerHTML = '<span class="spinner"></span>加载中...';
-            document.getElementById('codeBox').style.display = 'none';
-            document.getElementById('statsPanel').classList.remove('show');
-            document.getElementById('flowPanel').classList.remove('show');
+            status.className = '';
+            codeBox.style.display = 'none';
+            document.getElementById('analysisPanel').classList.remove('show');
             loadBtn.disabled = true;
 
             try {
-                let res = await fetch(url, { cache: 'no-store' });
-                if (!res.ok) {
-                    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-                    res = await fetch(proxy);
+                const gh = parseGitHubUrl(url);
+                let code = '', lang = getLangFromUrl(url), fileSize = 0, useApi = false;
+
+                if (gh) {
+                    // 🍅 优先尝试 GitHub API
+                    const apiUrl = `https://api.github.com/repos/${gh.user}/${gh.repo}/contents/${gh.path}?ref=${gh.branch}`;
+                    try {
+                        const res = await fetch(apiUrl);
+                        if (!res.ok) throw new Error('API ' + res.status);
+                        const json = await res.json();
+                        if (json.content) {
+                            code = b64DecodeUnicode(json.content);
+                            fileSize = json.size;
+                            useApi = true;
+                        }
+                    } catch (e) {
+                        console.warn('API 失败，降级为 Raw  fetch', e);
+                        // 降级：直接 fetch raw 链接
+                        const rawUrl = `https://raw.githubusercontent.com/${gh.user}/${gh.repo}/${gh.branch}/${gh.path}`;
+                        const res = await fetch(rawUrl);
+                        if (!res.ok) throw new Error('Raw ' + res.status);
+                        code = await res.text();
+                    }
+                } else {
+                    // 普通链接
+                    let res = await fetch(url);
+                    if (!res.ok) {
+                        const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+                        res = await fetch(proxy);
+                    }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    code = await res.text();
                 }
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                
-                const text = await res.text();
-                currentCode = text;
-                currentLang = getLanguage(url);
-                
-                // 分析函数
-                globalFunctions = analyzeFunctions(text, currentLang);
-                
-                // 渲染
-                document.getElementById('codeBox').style.display = 'block';
-                highlightCode(text, currentLang);
-                renderStats(analyzeCode(text, currentLang), currentLang);
-                renderFunctionList(globalFunctions);
-                
-                if (globalFunctions.length > 0) selectFunction(0);
+
+                highlightCode(code, lang);
+                codeBox.style.display = 'block';
+                renderAnalysis(analyzeCode(code, lang, fileSize), lang, useApi);
                 status.textContent = '✅ 加载成功';
-                
+                status.className = 'status-ok';
+
             } catch (e) {
-                status.textContent = `❌ 失败：${e.message}`;
+                status.textContent = '❌ 失败：' + e.message;
+                status.className = 'status-err';
             } finally {
                 loadBtn.disabled = false;
             }
         }
 
         async function copyCode() {
-            const code = document.getElementById('codeDisplay').textContent;
+            const text = document.getElementById('codeDisplay').textContent;
             const btn = document.getElementById('copyBtn');
-            try {
-                await navigator.clipboard.writeText(code);
-                btn.classList.add('copied');
-                btn.textContent = '✓ 已复制';
-                setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '📋 复制'; }, 1600);
-            } catch {
-                alert('复制失败');
-            }
+            await navigator.clipboard.writeText(text);
+            btn.classList.add('copied');
+            btn.textContent = '✓ 已复制';
+            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '📋 复制'; }, 1500);
         }
 
         function toggleWrap() {
-            const pre = document.getElementById('codePre');
+            const pre = document.querySelector('#codeBox pre');
             pre.style.whiteSpace = pre.style.whiteSpace === 'pre-wrap' ? 'pre' : 'pre-wrap';
         }
 
         window.addEventListener('DOMContentLoaded', () => {
             const url = getUrlParam('url');
-            if (url) {
-                document.getElementById('urlInput').value = url;
-                fetchCode(url);
-            }
-            document.getElementById('urlInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') fetchCode();
-            });
+            if (url) { document.getElementById('urlInput').value = url; fetchCode(); }
+            document.getElementById('urlInput').addEventListener('keypress', e => { if (e.key === 'Enter') fetchCode(); });
         });
     </script>
 </body>
