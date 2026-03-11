@@ -1,228 +1,198 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>代码预览 · GitHub API 增强</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29/themes/prism-tomorrow.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29/plugins/line-numbers/prism-line-numbers.min.css">
-    <style>
-        :root { --primary: #0366d6; --bg: #fafafa; --code-bg: #1e1e1e; }
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 950px; margin: 0 auto; padding: 1rem; background: var(--bg); color: #24292e; }
-        h2 { margin: 0 0 1rem; }
-        .header { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
-        input { flex: 1; min-width: 200px; padding: 9px 12px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; }
-        button { padding: 9px 18px; background: var(--primary); color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
-        button:hover { background: #0255b3; }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-        #status { margin: 8px 0; min-height: 1.2em; font-size: 14px; }
-        .status-ok { color: #28a745; } .status-err { color: #d73a49; }
-        
-        .analysis { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 12px; margin-bottom: 1rem; display: none; }
-        .analysis.show { display: block; }
-        .analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; font-size: 13px; }
-        .analysis-item { background: #f6f8fa; padding: 10px; border-radius: 6px; text-align: center; border: 1px solid #eee; }
-        .analysis-item .label { color: #666; display: block; font-size: 11px; margin-bottom: 4px; }
-        .analysis-item .value { font-weight: 600; color: #1a7f37; }
-        .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-        .tag { background: #e1ecf4; color: #39739d; padding: 3px 10px; border-radius: 12px; font-size: 11px; }
-        .tag.api { background: #fff5b1; color: #735c0f; }
-        
-        .code-box { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid #e1e4e8; }
-        .code-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #2d2d2d; color: #ccc; font-size: 12px; }
-        .code-lang { font-weight: 600; text-transform: uppercase; }
-        .code-actions { display: flex; gap: 6px; }
-        .code-actions button { padding: 3px 10px; font-size: 11px; background: #444; }
-        pre.line-numbers { margin: 0 !important; background: var(--code-bg) !important; }
-        pre.line-numbers code { font-family: ui-monospace, monospace; font-size: 13px; }
-        #copyBtn.copied { background: #28a745 !important; }
-        .footer { margin-top: 1.5rem; font-size: 12px; color: #666; text-align: center; }
-        .footer code { background: #eee; padding: 2px 6px; border-radius: 3px; }
-        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ccc; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GitHub Code Viewer</title>
+  <!-- Prism 核心样式 -->
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
+  <!-- Toolbar 样式 -->
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/toolbar/prism-toolbar.min.css" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1e1e; color: #d4d4d4;
+      padding: 20px; line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; background: #252526; border-radius: 6px;
+      margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+    }
+    .file-info { font-size: 14px; color: #9cdcfe; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-info a { color: #569cd6; text-decoration: none; }
+    .file-info a:hover { text-decoration: underline; }
+    .actions { display: flex; gap: 8px; }
+    .btn {
+      padding: 6px 12px; background: #0e639c; color: white;
+      border: none; border-radius: 4px; cursor: pointer;
+      font-size: 13px; transition: background 0.2s;
+    }
+    .btn:hover { background: #1177bb; }
+    .btn:disabled { background: #3c3c3c; cursor: not-allowed; }
+    .error {
+      background: #5a1d1d; color: #f48771; padding: 12px;
+      border-radius: 4px; margin-bottom: 16px; display: none;
+    }
+    .loading { text-align: center; padding: 40px; color: #888; display: none; }
+    /* Prism 代码块容器 */
+    pre {
+      background: #1e1e1e !important; border-radius: 6px !important;
+      margin: 0 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    code { font-size: 14px !important; }
+    /* 复制按钮样式优化 */
+    .prism-toolbar { top: 8px !important; right: 8px !important; }
+    .copy-to-clipboard-button {
+      background: #3c3c3c !important; color: #fff !important;
+      border: none !important; padding: 4px 10px !important;
+      border-radius: 4px !important; font-size: 12px !important;
+      cursor: pointer !important; transition: background 0.2s !important;
+    }
+    .copy-to-clipboard-button:hover { background: #505050 !important; }
+    .copy-to-clipboard-button[data-copy-state="copy-success"] {
+      background: #388a34 !important;
+    }
+    /* 响应式 */
+    @media (max-width: 600px) {
+      .header { flex-direction: column; align-items: flex-start; }
+      .file-info { max-width: 100%; }
+    }
+  </style>
 </head>
 <body>
-    <h2>✨ 代码预览 · GitHub API 增强</h2>
+  <div class="container">
     <div class="header">
-        <input type="text" id="urlInput" placeholder="GitHub 链接或 Raw 链接">
-        <button id="loadBtn" onclick="fetchCode()">🔍 加载</button>
+      <div class="file-info" id="fileInfo">等待加载...</div>
+      <div class="actions">
+        <button class="btn" id="openGithub" disabled>在 GitHub 打开</button>
+        <button class="btn" id="copyAll" disabled>复制全部</button>
+      </div>
     </div>
-    <div id="status"></div>
-    
-    <div class="analysis" id="analysisPanel">
-        <div class="analysis-grid">
-            <div class="analysis-item"><span class="label">📏 行数</span><span class="value" id="statLines">-</span></div>
-            <div class="analysis-item"><span class="label">💾 大小</span><span class="value" id="statSize">-</span></div>
-            <div class="analysis-item"><span class="label">⚙️ 函数</span><span class="value" id="statFuncs">-</span></div>
-            <div class="analysis-item"><span class="label">🔗 依赖</span><span class="value" id="statImports">-</span></div>
-        </div>
-        <div class="tags" id="tagList"></div>
-    </div>
-    
-    <div class="code-box" id="codeBox" style="display:none;">
-        <div class="code-header">
-            <span class="code-lang" id="codeLang">TXT</span>
-            <div class="code-actions">
-                <button onclick="toggleWrap()">🔁 换行</button>
-                <button id="copyBtn" onclick="copyCode()">📋 复制</button>
-            </div>
-        </div>
-        <pre class="line-numbers"><code id="codeDisplay"></code></pre>
-    </div>
-    
-    <div class="footer">
-        支持 GitHub Blob/Raw 链接自动识别 API<br>
-        用法：<code>?url=https://github.com/user/repo/blob/main/file.js</code>
-    </div>
+    <div class="error" id="errorMsg"></div>
+    <div class="loading" id="loading">🔄 加载中...</div>
+    <pre class="line-numbers" style="display:none;"><code id="codeBlock" class="language-javascript"></code></pre>
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/prism.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/plugins/autoloader/prism-autoloader.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/plugins/line-numbers/prism-line-numbers.min.js"></script>
-    <script>
-        const LANG_MAP = { js:'javascript', ts:'typescript', py:'python', html:'html', css:'css', json:'json', md:'markdown', yml:'yaml', sh:'bash', sql:'sql', go:'go', rs:'rust', java:'java', php:'php' };
+  <!-- Prism 核心 + 语言 + 插件 -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+
+  <script>
+    // 解析 GitHub URL → raw 链接 + 语言
+    function parseGitHubUrl(url) {
+      const patterns = [
+        // github.com/owner/repo/blob/branch/path
+        /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/,
+        // github.com/owner/repo/blob/branch/path#L10-L20
+        /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)#.*$/,
+      ];
+      for (const re of patterns) {
+        const m = url.match(re);
+        if (m) {
+          const [_, owner, repo, ref, path] = m;
+          return {
+            raw: `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`,
+            github: `https://github.com/${owner}/${repo}/blob/${ref}/${path}`,
+            lang: path.split('.').pop()?.toLowerCase() || 'plaintext',
+            filename: path.split('/').pop()
+          };
+        }
+      }
+      // 直接 raw 链接
+      if (url.includes('raw.githubusercontent.com')) {
+        const parts = url.split('/');
+        const filename = parts.pop();
+        return {
+          raw: url,
+          github: url.replace('raw.githubusercontent.com', 'github.com').replace(/\/raw\/[^/]+\/[^/]+\/[^/]+\//, '/blob/'),
+          lang: filename.split('.').pop()?.toLowerCase() || 'plaintext',
+          filename
+        };
+      }
+      return null;
+    }
+
+    // 获取 URL 参数
+    function getUrlParam(name) {
+      return new URLSearchParams(window.location.search).get(name);
+    }
+
+    // 主逻辑
+    async function loadCode() {
+      const url = getUrlParam('url');
+      const errorEl = document.getElementById('errorMsg');
+      const loading = document.getElementById('loading');
+      const codeBlock = document.getElementById('codeBlock');
+      const pre = codeBlock.parentElement;
+      const fileInfo = document.getElementById('fileInfo');
+      const openBtn = document.getElementById('openGithub');
+      const copyAllBtn = document.getElementById('copyAll');
+
+      if (!url) {
+        errorEl.textContent = '❌ 缺少 url 参数，示例: ?url=https://github.com/owner/repo/blob/main/file.js';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      const info = parseGitHubUrl(url);
+      if (!info) {
+        errorEl.textContent = '❌ 不支持的 GitHub 链接格式';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      // 更新 UI
+      fileInfo.innerHTML = `📄 <a href="${info.github}" target="_blank">${info.filename}</a>`;
+      openBtn.href = info.github;
+      openBtn.disabled = false;
+      loading.style.display = 'block';
+      pre.style.display = 'none';
+
+      try {
+        const res = await fetch(info.raw);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const code = await res.text();
+
+        // 设置代码和语言
+        codeBlock.textContent = code;
+        codeBlock.className = `language-${info.lang}`;
         
-        function getUrlParam(name) { return new URLSearchParams(window.location.search).get(name); }
-        function getLangFromUrl(url) {
-            const ext = (url.split('.').pop() || '').toLowerCase().split('?')[0];
-            return LANG_MAP[ext] || 'plaintext';
-        }
+        // 高亮 + 行号
+        Prism.highlightElement(codeBlock);
+        Prism.plugins.lineNumbers.resize(codeBlock.parentElement);
 
-        // 🍅 GitHub URL 解析
-        function parseGitHubUrl(url) {
-            // 匹配 github.com/user/repo/blob/branch/path 或 raw.githubusercontent.com
-            const blobRegex = /github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)/;
-            const rawRegex = /raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)/;
-            let m = url.match(blobRegex);
-            if (m) return { user: m[1], repo: m[2], branch: m[3], path: m[4], type: 'blob' };
-            m = url.match(rawRegex);
-            if (m) return { user: m[1], repo: m[2], branch: m[3], path: m[4], type: 'raw' };
-            return null;
-        }
+        // 显示
+        pre.style.display = 'block';
+        copyAllBtn.disabled = false;
 
-        // 📊 分析
-        function analyzeCode(code, lang, apiSize) {
-            const lines = code.split('\n');
-            const size = apiSize ? formatSize(apiSize) : formatSize(new Blob([code]).size);
-            let funcs = 0, imports = 0;
-            if (['javascript','typescript'].includes(lang)) {
-                funcs = (code.match(/\b(function\s+\w+|(\w+)\s*[:=]\s*(async\s*)?\(|async\s+function)/g) || []).length;
-                imports = [...new Set(code.match(/(?:import|require)\s*['"]([^'"]+)['"]/g) || [])].length;
-            } else if (lang === 'python') {
-                funcs = (code.match(/^\s*def\s+\w+/gm) || []).length;
-            }
-            return { lines: lines.length, size, funcs, imports };
-        }
-        function formatSize(b) { return b < 1024 ? b+' B' : b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(2)+' MB'; }
+        // 复制全部按钮
+        copyAllBtn.onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(code);
+            const old = copyAllBtn.textContent;
+            copyAllBtn.textContent = '✓ 已复制';
+            setTimeout(() => copyAllBtn.textContent = old, 1500);
+          } catch {
+            alert('复制失败，请手动选择复制');
+          }
+        };
 
-        function renderAnalysis(stats, lang, isApi) {
-            document.getElementById('statLines').textContent = stats.lines.toLocaleString();
-            document.getElementById('statSize').textContent = stats.size;
-            document.getElementById('statFuncs').textContent = stats.funcs || '-';
-            document.getElementById('statImports').textContent = stats.imports || '-';
-            document.getElementById('codeLang').textContent = lang.toUpperCase();
-            const tags = [`<span class="tag">${lang.toUpperCase()}</span>`];
-            if (isApi) tags.push('<span class="tag api">🍅 GitHub API</span>');
-            document.getElementById('tagList').innerHTML = tags.join('');
-            document.getElementById('analysisPanel').classList.add('show');
-        }
+      } catch (e) {
+        errorEl.textContent = `❌ 加载失败: ${e.message}\n可能原因: 文件不存在 / 仓库私有 / CORS 限制`;
+        errorEl.style.display = 'block';
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
 
-        function highlightCode(code, lang) {
-            const el = document.getElementById('codeDisplay');
-            el.className = `language-${lang}`;
-            el.textContent = code;
-            if (window.Prism) {
-                Prism.plugins.autoloader.loadLanguages([lang], () => Prism.highlightElement(el));
-            }
-        }
-
-        // 🔄 解码 Base64 (支持 UTF-8)
-        function b64DecodeUnicode(str) {
-            return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        }
-
-        async function fetchCode() {
-            const url = document.getElementById('urlInput').value.trim();
-            const status = document.getElementById('status');
-            const loadBtn = document.getElementById('loadBtn');
-            const codeBox = document.getElementById('codeBox');
-            
-            if (!url) { status.textContent = '👉 请输入链接'; status.className = 'status-err'; return; }
-            
-            status.innerHTML = '<span class="spinner"></span>加载中...';
-            status.className = '';
-            codeBox.style.display = 'none';
-            document.getElementById('analysisPanel').classList.remove('show');
-            loadBtn.disabled = true;
-
-            try {
-                const gh = parseGitHubUrl(url);
-                let code = '', lang = getLangFromUrl(url), fileSize = 0, useApi = false;
-
-                if (gh) {
-                    // 🍅 优先尝试 GitHub API
-                    const apiUrl = `https://api.github.com/repos/${gh.user}/${gh.repo}/contents/${gh.path}?ref=${gh.branch}`;
-                    try {
-                        const res = await fetch(apiUrl);
-                        if (!res.ok) throw new Error('API ' + res.status);
-                        const json = await res.json();
-                        if (json.content) {
-                            code = b64DecodeUnicode(json.content);
-                            fileSize = json.size;
-                            useApi = true;
-                        }
-                    } catch (e) {
-                        console.warn('API 失败，降级为 Raw  fetch', e);
-                        // 降级：直接 fetch raw 链接
-                        const rawUrl = `https://raw.githubusercontent.com/${gh.user}/${gh.repo}/${gh.branch}/${gh.path}`;
-                        const res = await fetch(rawUrl);
-                        if (!res.ok) throw new Error('Raw ' + res.status);
-                        code = await res.text();
-                    }
-                } else {
-                    // 普通链接
-                    let res = await fetch(url);
-                    if (!res.ok) {
-                        const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-                        res = await fetch(proxy);
-                    }
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    code = await res.text();
-                }
-
-                highlightCode(code, lang);
-                codeBox.style.display = 'block';
-                renderAnalysis(analyzeCode(code, lang, fileSize), lang, useApi);
-                status.textContent = '✅ 加载成功';
-                status.className = 'status-ok';
-
-            } catch (e) {
-                status.textContent = '❌ 失败：' + e.message;
-                status.className = 'status-err';
-            } finally {
-                loadBtn.disabled = false;
-            }
-        }
-
-        async function copyCode() {
-            const text = document.getElementById('codeDisplay').textContent;
-            const btn = document.getElementById('copyBtn');
-            await navigator.clipboard.writeText(text);
-            btn.classList.add('copied');
-            btn.textContent = '✓ 已复制';
-            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '📋 复制'; }, 1500);
-        }
-
-        function toggleWrap() {
-            const pre = document.querySelector('#codeBox pre');
-            pre.style.whiteSpace = pre.style.whiteSpace === 'pre-wrap' ? 'pre' : 'pre-wrap';
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const url = getUrlParam('url');
-            if (url) { document.getElementById('urlInput').value = url; fetchCode(); }
-            document.getElementById('urlInput').addEventListener('keypress', e => { if (e.key === 'Enter') fetchCode(); });
-        });
-    </script>
+    // 初始化
+    document.addEventListener('DOMContentLoaded', loadCode);
+  </script>
 </body>
 </html>
