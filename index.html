@@ -3,23 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GitHub Code Viewer</title>
-  <!-- Prism 核心样式 -->
+  <title>GitHub Code Viewer Pro</title>
   <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
-  <!-- Toolbar 样式 -->
   <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/toolbar/prism-toolbar.min.css" rel="stylesheet"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1e1e1e; color: #d4d4d4;
-      padding: 20px; line-height: 1.6;
+      background: #1e1e1e; color: #d4d4d4; padding: 16px; line-height: 1.5;
     }
-    .container { max-width: 1200px; margin: 0 auto; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    
+    /* 头部 */
     .header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 12px 16px; background: #252526; border-radius: 6px;
-      margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+      margin-bottom: 12px; flex-wrap: wrap; gap: 10px;
     }
     .file-info { font-size: 14px; color: #9cdcfe; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-info a { color: #569cd6; text-decoration: none; }
@@ -27,38 +26,75 @@
     .actions { display: flex; gap: 8px; }
     .btn {
       padding: 6px 12px; background: #0e639c; color: white;
-      border: none; border-radius: 4px; cursor: pointer;
-      font-size: 13px; transition: background 0.2s;
+      border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+      transition: background 0.2s;
     }
     .btn:hover { background: #1177bb; }
     .btn:disabled { background: #3c3c3c; cursor: not-allowed; }
+    .btn-outline { background: transparent; border: 1px solid #0e639c; }
+    .btn-outline:hover { background: #0e639c20; }
+
+    /* 分析面板 */
+    .analysis {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px; margin-bottom: 12px;
+    }
+    .stat-card {
+      background: #252526; padding: 12px; border-radius: 6px;
+      text-align: center; border-left: 3px solid #569cd6;
+    }
+    .stat-card.warning { border-left-color: #dcdcaa; }
+    .stat-card.danger { border-left-color: #f48771; }
+    .stat-value { font-size: 20px; font-weight: 600; color: #fff; }
+    .stat-label { font-size: 12px; color: #888; margin-top: 4px; }
+    .stat-sub { font-size: 11px; color: #666; margin-top: 2px; }
+
+    /* 依赖列表 */
+    .deps {
+      background: #252526; border-radius: 6px; padding: 10px 14px;
+      margin-bottom: 12px; display: none;
+    }
+    .deps.show { display: block; }
+    .deps-title { font-size: 13px; color: #9cdcfe; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .deps-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dep-tag {
+      background: #3c3c3c; padding: 4px 10px; border-radius: 4px;
+      font-size: 12px; color: #ce9178; cursor: pointer; transition: background 0.2s;
+    }
+    .dep-tag:hover { background: #4a4a4a; }
+    .dep-tag.external { color: #4ec9b0; }
+
+    /* 错误/加载 */
     .error {
       background: #5a1d1d; color: #f48771; padding: 12px;
-      border-radius: 4px; margin-bottom: 16px; display: none;
+      border-radius: 4px; margin-bottom: 12px; display: none;
     }
-    .loading { text-align: center; padding: 40px; color: #888; display: none; }
-    /* Prism 代码块容器 */
+    .loading { text-align: center; padding: 30px; color: #888; display: none; }
+
+    /* 代码区域 */
     pre {
       background: #1e1e1e !important; border-radius: 6px !important;
       margin: 0 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      max-height: 70vh; overflow: auto;
     }
-    code { font-size: 14px !important; }
-    /* 复制按钮样式优化 */
+    code { font-size: 13px !important; }
     .prism-toolbar { top: 8px !important; right: 8px !important; }
     .copy-to-clipboard-button {
       background: #3c3c3c !important; color: #fff !important;
       border: none !important; padding: 4px 10px !important;
       border-radius: 4px !important; font-size: 12px !important;
-      cursor: pointer !important; transition: background 0.2s !important;
+      cursor: pointer !important;
     }
     .copy-to-clipboard-button:hover { background: #505050 !important; }
-    .copy-to-clipboard-button[data-copy-state="copy-success"] {
-      background: #388a34 !important;
-    }
+    .copy-to-clipboard-button[data-copy-state="copy-success"] { background: #388a34 !important; }
+
     /* 响应式 */
-    @media (max-width: 600px) {
+    @media (max-width: 768px) {
       .header { flex-direction: column; align-items: flex-start; }
-      .file-info { max-width: 100%; }
+      .analysis { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .analysis { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -67,16 +103,56 @@
     <div class="header">
       <div class="file-info" id="fileInfo">等待加载...</div>
       <div class="actions">
-        <button class="btn" id="openGithub" disabled>在 GitHub 打开</button>
-        <button class="btn" id="copyAll" disabled>复制全部</button>
+        <button class="btn btn-outline" id="toggleAnalysis">📊 分析</button>
+        <button class="btn" id="openGithub" disabled>GitHub</button>
+        <button class="btn" id="copyAll" disabled>复制</button>
       </div>
     </div>
+
+    <!-- 分析面板 -->
+    <div id="analysisPanel" style="display:none;">
+      <div class="analysis">
+        <div class="stat-card">
+          <div class="stat-value" id="statLines">-</div>
+          <div class="stat-label">总行数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statSize">-</div>
+          <div class="stat-label">文件大小</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-value" id="statComments">-</div>
+          <div class="stat-label">注释占比</div>
+          <div class="stat-sub" id="commentPercent">0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statFunctions">-</div>
+          <div class="stat-label">函数/方法</div>
+        </div>
+        <div class="stat-card danger">
+          <div class="stat-value" id="statComplexity">-</div>
+          <div class="stat-label">估算复杂度</div>
+          <div class="stat-sub" id="complexityLevel">低</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statImports">-</div>
+          <div class="stat-label">依赖模块</div>
+        </div>
+      </div>
+
+      <!-- 依赖列表 -->
+      <div class="deps" id="depsBox">
+        <div class="deps-title">📦 检测到的依赖</div>
+        <div class="deps-list" id="depsList"></div>
+      </div>
+    </div>
+
     <div class="error" id="errorMsg"></div>
-    <div class="loading" id="loading">🔄 加载中...</div>
+    <div class="loading" id="loading">🔄 加载并分析中...</div>
     <pre class="line-numbers" style="display:none;"><code id="codeBlock" class="language-javascript"></code></pre>
   </div>
 
-  <!-- Prism 核心 + 语言 + 插件 -->
+  <!-- Prism -->
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
@@ -84,46 +160,130 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 
   <script>
-    // 解析 GitHub URL → raw 链接 + 语言
+    // ====== URL 解析 ======
     function parseGitHubUrl(url) {
       const patterns = [
-        // github.com/owner/repo/blob/branch/path
-        /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/,
-        // github.com/owner/repo/blob/branch/path#L10-L20
-        /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)#.*$/,
+        /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+?)(?:#.*)?$/,
+        /^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/
       ];
       for (const re of patterns) {
         const m = url.match(re);
         if (m) {
           const [_, owner, repo, ref, path] = m;
+          const isRaw = url.includes('raw.githubusercontent.com');
           return {
-            raw: `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`,
-            github: `https://github.com/${owner}/${repo}/blob/${ref}/${path}`,
-            lang: path.split('.').pop()?.toLowerCase() || 'plaintext',
-            filename: path.split('/').pop()
+            raw: isRaw ? url : `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`,
+            github: isRaw ? url.replace('raw.githubusercontent.com', 'github.com').replace(/\/([^/]+)\/([^/]+)\/raw\/[^/]+\/(.+)/, '/$1/$2/blob/$3') : url,
+            lang: (path||'').split('.').pop()?.toLowerCase() || 'plaintext',
+            filename: (path||'').split('/').pop() || 'unknown'
           };
         }
-      }
-      // 直接 raw 链接
-      if (url.includes('raw.githubusercontent.com')) {
-        const parts = url.split('/');
-        const filename = parts.pop();
-        return {
-          raw: url,
-          github: url.replace('raw.githubusercontent.com', 'github.com').replace(/\/raw\/[^/]+\/[^/]+\/[^/]+\//, '/blob/'),
-          lang: filename.split('.').pop()?.toLowerCase() || 'plaintext',
-          filename
-        };
       }
       return null;
     }
 
-    // 获取 URL 参数
     function getUrlParam(name) {
       return new URLSearchParams(window.location.search).get(name);
     }
 
-    // 主逻辑
+    // ====== 代码分析引擎 ======
+    const CodeAnalyzer = {
+      // 基础统计
+      basicStats(code) {
+        const lines = code.split('\n');
+        const totalLines = lines.length;
+        const codeLines = lines.filter(l => l.trim() && !l.trim().startsWith('//') && !l.trim().startsWith('#') && !l.trim().startsWith('/*')).length;
+        const emptyLines = lines.filter(l => !l.trim()).length;
+        const commentLines = totalLines - codeLines - emptyLines;
+        const bytes = new Blob([code]).size;
+        
+        return {
+          totalLines, codeLines, emptyLines, commentLines,
+          commentPercent: totalLines ? Math.round(commentLines / totalLines * 100) : 0,
+          size: bytes < 1024 ? `${bytes} B` : bytes < 1024*1024 ? `${(bytes/1024).toFixed(1)} KB` : `${(bytes/1024/1024).toFixed(2)} MB`
+        };
+      },
+
+      // 函数/类检测（简化版）
+      countFunctions(code, lang) {
+        let count = 0;
+        const patterns = {
+          javascript: [/\bfunction\s+\w+/g, /\b(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?\(/g, /\w+\s*[:=]\s*(?:async\s*)?\([^)]*\)\s*=>/g],
+          python: [/\bdef\s+\w+/g],
+          java: [/\b(?:public|private|protected|\s)\s*(?:static\s+)?\w+\s+\w+\s*\([^)]*\)\s*\{?/g],
+          php: [/\bfunction\s+\w+/g],
+          go: [/\bfunc\s+(?:\([^)]+\)\s+)?\w+/g]
+        };
+        const regs = patterns[lang] || patterns.javascript;
+        for (const re of regs) {
+          const matches = code.match(re);
+          if (matches) count += matches.length;
+        }
+        // 去重估算
+        return Math.min(count, Math.round(count * 0.8));
+      },
+
+      // 依赖提取
+      extractImports(code, lang) {
+        const deps = new Set();
+        const patterns = {
+          javascript: [
+            /(?:import|from)\s+['"]([^'"]+)['"]/g,
+            /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+          ],
+          python: [
+            /^\s*import\s+(\w+)/gm,
+            /^\s*from\s+(\w+)(?:\.\w+)*\s+import/gm
+          ],
+          php: [
+            /(?:include|require)\s*['"]([^'"]+)['"]/g
+          ]
+        };
+        const regs = patterns[lang] || patterns.javascript;
+        for (const re of regs) {
+          let m;
+          while ((m = re.exec(code)) !== null) {
+            if (m[1] && !m[1].startsWith('.')) deps.add(m[1]);
+          }
+        }
+        return Array.from(deps).slice(0, 20); // 限制显示数量
+      },
+
+      // 复杂度估算（基于控制流关键字）
+      estimateComplexity(code, lang) {
+        const keywords = ['if', 'else', 'for', 'while', 'switch', 'case', 'catch', '&&', '||', '\?'];
+        let score = 1;
+        for (const kw of keywords) {
+          const regex = new RegExp(`\\b${kw.replace(/[?*+]/g, '\\$&')}\\b`, 'g');
+          const matches = code.match(regex);
+          if (matches) score += matches.length * 0.5;
+        }
+        // 嵌套深度粗略估算
+        let maxDepth = 0, depth = 0;
+        for (const ch of code) {
+          if (ch === '{' || ch === '(') { depth++; maxDepth = Math.max(maxDepth, depth); }
+          else if (ch === '}' || ch === ')') depth--;
+        }
+        score += maxDepth * 0.8;
+        
+        const level = score < 10 ? '低' : score < 25 ? '中' : score < 50 ? '高' : '极高';
+        const color = score < 10 ? '#4ec9b0' : score < 25 ? '#dcdcaa' : score < 50 ? '#ce9178' : '#f48771';
+        return { score: Math.round(score), level, color };
+      },
+
+      // 主分析入口
+      analyze(code, lang) {
+        const basic = this.basicStats(code);
+        return {
+          ...basic,
+          functions: this.countFunctions(code, lang),
+          imports: this.extractImports(code, lang),
+          complexity: this.estimateComplexity(code, lang)
+        };
+      }
+    };
+
+    // ====== 主逻辑 ======
     async function loadCode() {
       const url = getUrlParam('url');
       const errorEl = document.getElementById('errorMsg');
@@ -133,6 +293,8 @@
       const fileInfo = document.getElementById('fileInfo');
       const openBtn = document.getElementById('openGithub');
       const copyAllBtn = document.getElementById('copyAll');
+      const toggleBtn = document.getElementById('toggleAnalysis');
+      const analysisPanel = document.getElementById('analysisPanel');
 
       if (!url) {
         errorEl.textContent = '❌ 缺少 url 参数，示例: ?url=https://github.com/owner/repo/blob/main/file.js';
@@ -147,51 +309,89 @@
         return;
       }
 
-      // 更新 UI
+      // UI 初始化
       fileInfo.innerHTML = `📄 <a href="${info.github}" target="_blank">${info.filename}</a>`;
-      openBtn.href = info.github;
+      openBtn.onclick = () => window.open(info.github, '_blank');
       openBtn.disabled = false;
       loading.style.display = 'block';
       pre.style.display = 'none';
+      analysisPanel.style.display = 'none';
 
       try {
         const res = await fetch(info.raw);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const code = await res.text();
 
-        // 设置代码和语言
+        // 代码高亮
         codeBlock.textContent = code;
         codeBlock.className = `language-${info.lang}`;
-        
-        // 高亮 + 行号
         Prism.highlightElement(codeBlock);
-        Prism.plugins.lineNumbers.resize(codeBlock.parentElement);
+        Prism.plugins.lineNumbers.resize(pre);
+
+        // 执行分析
+        const analysis = CodeAnalyzer.analyze(code, info.lang);
+        renderAnalysis(analysis, info.lang);
 
         // 显示
         pre.style.display = 'block';
         copyAllBtn.disabled = false;
+        toggleBtn.disabled = false;
 
-        // 复制全部按钮
+        // 复制全部
         copyAllBtn.onclick = async () => {
           try {
             await navigator.clipboard.writeText(code);
-            const old = copyAllBtn.textContent;
-            copyAllBtn.textContent = '✓ 已复制';
-            setTimeout(() => copyAllBtn.textContent = old, 1500);
-          } catch {
-            alert('复制失败，请手动选择复制');
-          }
+            copyAllBtn.textContent = '✓';
+            setTimeout(() => copyAllBtn.textContent = '复制', 1200);
+          } catch { alert('复制失败'); }
+        };
+
+        // 切换分析面板
+        toggleBtn.onclick = () => {
+          const show = analysisPanel.style.display === 'none';
+          analysisPanel.style.display = show ? 'block' : 'none';
+          toggleBtn.textContent = show ? '📊 隐藏' : '📊 分析';
         };
 
       } catch (e) {
-        errorEl.textContent = `❌ 加载失败: ${e.message}\n可能原因: 文件不存在 / 仓库私有 / CORS 限制`;
+        errorEl.textContent = `❌ 加载失败: ${e.message}`;
         errorEl.style.display = 'block';
       } finally {
         loading.style.display = 'none';
       }
     }
 
-    // 初始化
+    // 渲染分析结果
+    function renderAnalysis(data, lang) {
+      document.getElementById('statLines').textContent = data.totalLines.toLocaleString();
+      document.getElementById('statSize').textContent = data.size;
+      document.getElementById('statComments').textContent = `${data.commentPercent}%`;
+      document.getElementById('commentPercent').textContent = `注释 ${data.commentLines} 行`;
+      document.getElementById('statFunctions').textContent = data.functions;
+      document.getElementById('statComplexity').textContent = data.complexity.score;
+      document.getElementById('complexityLevel').textContent = data.complexity.level;
+      document.getElementById('complexityLevel').style.color = data.complexity.color;
+      document.getElementById('statImports').textContent = data.imports.length;
+
+      // 依赖标签
+      const depsBox = document.getElementById('depsBox');
+      const depsList = document.getElementById('depsList');
+      depsList.innerHTML = '';
+      if (data.imports.length > 0) {
+        depsBox.classList.add('show');
+        data.imports.forEach(dep => {
+          const tag = document.createElement('span');
+          tag.className = `dep-tag ${dep.includes('/') || dep.startsWith('@') ? 'external' : ''}`;
+          tag.textContent = dep;
+          tag.title = '点击搜索该模块';
+          tag.onclick = () => window.open(`https://www.npmjs.com/package/${dep.replace('@', '').split('/')[0]}`, '_blank');
+          depsList.appendChild(tag);
+        });
+      } else {
+        depsBox.classList.remove('show');
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', loadCode);
   </script>
 </body>
