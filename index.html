@@ -3,18 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>代码预览</title>
-    <!-- 可选：代码高亮样式 -->
+    <title>代码预览与分析</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29/themes/prism.min.css">
     <style>
         body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 1rem; background: #fafafa; }
+        h2 { margin-bottom: 1rem; }
         .header { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
         input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 8px 16px; background: #0366d6; color: white; border: none; border-radius: 4px; cursor: pointer; }
         button:hover { background: #0255b3; }
         #status { margin: 10px 0; color: #d73a49; min-height: 1.2em; font-size: 14px; }
+        
+        /* 分析面板 */
+        .analysis { background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; padding: 12px; margin-bottom: 1rem; display: none; }
+        .analysis.show { display: block; }
+        .analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 13px; }
+        .analysis-item { background: #f6f8fa; padding: 8px; border-radius: 4px; text-align: center; }
+        .analysis-item .label { color: #666; display: block; font-size: 11px; }
+        .analysis-item .value { font-weight: 600; color: #24292e; }
+        
         .code-box { position: relative; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; }
-        .code-box pre { margin: 0; padding: 1rem; overflow: auto; max-height: 70vh; }
+        .code-box pre { margin: 0; padding: 1rem; overflow: auto; max-height: 60vh; }
         .code-box code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
         #copyBtn {
             position: absolute; top: 8px; right: 8px;
@@ -23,15 +32,32 @@
         }
         #copyBtn.copied { background: #28a745; color: white; border-color: #28a745; }
         .footer { margin-top: 1rem; font-size: 12px; color: #666; }
+        
+        /* 标签 */
+        .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .tag { background: #e1ecf4; color: #39739d; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
     </style>
 </head>
 <body>
-    <h2>📄 代码预览</h2>
+    <h2>📄 代码预览 + 分析</h2>
     <div class="header">
         <input type="text" id="urlInput" placeholder="或输入代码 raw 网址">
         <button onclick="fetchCode()">加载</button>
     </div>
     <div id="status"></div>
+    
+    <!-- 分析面板 -->
+    <div class="analysis" id="analysisPanel">
+        <div class="analysis-grid">
+            <div class="analysis-item"><span class="label">行数</span><span class="value" id="statLines">-</span></div>
+            <div class="analysis-item"><span class="label">字符数</span><span class="value" id="statChars">-</span></div>
+            <div class="analysis-item"><span class="label">文件大小</span><span class="value" id="statSize">-</span></div>
+            <div class="analysis-item"><span class="label">函数数</span><span class="value" id="statFuncs">-</span></div>
+            <div class="analysis-item"><span class="label">注释占比</span><span class="value" id="statComments">-</span></div>
+            <div class="analysis-item"><span class="label">依赖模块</span><span class="value" id="statImports">-</span></div>
+        </div>
+        <div class="tags" id="tagList"></div>
+    </div>
     
     <div class="code-box" id="codeBox" style="display:none;">
         <button id="copyBtn" onclick="copyCode()">复制</button>
@@ -42,20 +68,73 @@
         用法：<code>?url=https://raw.githubusercontent.com/user/repo/main/file.js</code>
     </div>
 
-    <!-- 可选：代码高亮脚本 -->
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/prism.min.js"></script>
     <script>
-        // 解析 URL 参数
         function getUrlParam(name) {
-            const params = new URLSearchParams(window.location.search);
-            return params.get(name);
+            return new URLSearchParams(window.location.search).get(name);
         }
 
-        // 自动检测语言（简单扩展名判断）
         function getLanguage(url) {
             const ext = (url.split('.').pop() || '').toLowerCase();
-            const map = { js: 'javascript', ts: 'typescript', py: 'python', html: 'html', css: 'css', json: 'json', md: 'markdown' };
-            return map[ext] || 'javascript';
+            const map = { js:'javascript', ts:'typescript', py:'python', html:'html', css:'css', json:'json', md:'markdown', sh:'bash' };
+            return map[ext] || 'plaintext';
+        }
+
+        // 📊 简单代码分析
+        function analyzeCode(code, lang) {
+            const lines = code.split('\n');
+            const stats = {
+                lines: lines.length,
+                chars: code.length,
+                size: formatSize(new Blob([code]).size),
+                functions: 0,
+                comments: 0,
+                imports: []
+            };
+
+            // 函数检测（支持 JS/TS/Python 等）
+            if (['javascript','typescript'].includes(lang)) {
+                stats.functions = (code.match(/\b(function\s+\w+|(\w+)\s*[:=]\s*(async\s*)?\(|async\s+function)/g) || []).length;
+                stats.imports = [...new Set(code.match(/(?:import|require)\s*['"]([^'"]+)['"]/g)?.map(m => m.split(/['"]/)[1]) || [])];
+                // 注释占比（单行 + 多行）
+                const commentLines = lines.filter(l => /^\s*\/\/|^\s*\/\*|\*\/\s*$/.test(l)).length;
+                stats.comments = Math.round((commentLines / stats.lines) * 100) + '%';
+            } else if (lang === 'python') {
+                stats.functions = (code.match(/^\s*def\s+\w+/gm) || []).length;
+                stats.imports = [...new Set(code.match(/^\s*(import|from)\s+[\w.]+/gm)?.map(m => m.trim()) || [])];
+                const commentLines = lines.filter(l => /^\s*#/.test(l)).length;
+                stats.comments = Math.round((commentLines / stats.lines) * 100) + '%';
+            } else {
+                stats.comments = '-';
+                stats.functions = '-';
+            }
+
+            return stats;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+            return (bytes/1024/1024).toFixed(2) + ' MB';
+        }
+
+        function renderAnalysis(stats, lang, url) {
+            document.getElementById('statLines').textContent = stats.lines.toLocaleString();
+            document.getElementById('statChars').textContent = stats.chars.toLocaleString();
+            document.getElementById('statSize').textContent = stats.size;
+            document.getElementById('statFuncs').textContent = stats.functions;
+            document.getElementById('statComments').textContent = stats.comments;
+            document.getElementById('statImports').textContent = stats.imports.length || '-';
+            
+            // 标签
+            const tags = [lang.toUpperCase(), stats.lines > 500 ? '📄 大文件' : '📝 小文件'];
+            if (stats.imports.length) tags.push(`🔗 ${stats.imports.length} 依赖`);
+            if (stats.functions !== '-' && stats.functions > 10) tags.push('⚙️ 复杂');
+            
+            const tagList = document.getElementById('tagList');
+            tagList.innerHTML = tags.map(t => `<span class="tag">${t}</span>`).join('');
+            
+            document.getElementById('analysisPanel').classList.add('show');
         }
 
         async function fetchCode(targetUrl) {
@@ -65,38 +144,39 @@
             const codeBox = document.getElementById('codeBox');
             const copyBtn = document.getElementById('copyBtn');
             
-            if (!url) { status.textContent = '请输入代码网址'; return; }
+            if (!url) { status.textContent = '👉 请输入代码网址'; return; }
             
-            status.textContent = '加载中...';
+            status.textContent = '🔄 加载中...';
             codeBox.style.display = 'none';
+            document.getElementById('analysisPanel').classList.remove('show');
             copyBtn.classList.remove('copied');
             copyBtn.textContent = '复制';
 
             try {
-                // 尝试直接请求（需目标支持 CORS）
                 let res = await fetch(url);
-                
-                // 若失败，尝试 CORS 代理（可选）
                 if (!res.ok) {
                     const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
                     res = await fetch(proxy);
                 }
-                
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 
                 const text = await res.text();
                 const lang = getLanguage(url);
                 
+                // 显示代码
                 codeDisplay.className = `language-${lang}`;
                 codeDisplay.textContent = text;
                 codeBox.style.display = 'block';
-                status.textContent = '';
                 
-                // 高亮（如果加载了 Prism）
+                // 分析并渲染
+                const stats = analyzeCode(text, lang);
+                renderAnalysis(stats, lang, url);
+                
+                status.textContent = '';
                 if (window.Prism) Prism.highlightElement(codeDisplay);
                 
             } catch (e) {
-                status.textContent = '❌ 获取失败：' + e.message + '（检查 CORS 或网址）';
+                status.textContent = '❌ 获取失败：' + e.message;
                 console.error(e);
             }
         }
@@ -108,16 +188,10 @@
                 await navigator.clipboard.writeText(text);
                 btn.classList.add('copied');
                 btn.textContent = '✓ 已复制';
-                setTimeout(() => {
-                    btn.classList.remove('copied');
-                    btn.textContent = '复制';
-                }, 1500);
-            } catch {
-                alert('复制失败，请手动选择复制');
-            }
+                setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '复制'; }, 1500);
+            } catch { alert('复制失败'); }
         }
 
-        // 页面加载时自动处理 ?url= 参数
         window.addEventListener('DOMContentLoaded', () => {
             const url = getUrlParam('url');
             if (url) {
