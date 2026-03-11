@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码预览</title>
+    <!-- 可选：代码高亮样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29/themes/prism.min.css">
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 1rem; background: #fafafa; }
+        .header { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
+        input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 8px 16px; background: #0366d6; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0255b3; }
+        #status { margin: 10px 0; color: #d73a49; min-height: 1.2em; font-size: 14px; }
+        .code-box { position: relative; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; }
+        .code-box pre { margin: 0; padding: 1rem; overflow: auto; max-height: 70vh; }
+        .code-box code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+        #copyBtn {
+            position: absolute; top: 8px; right: 8px;
+            padding: 4px 10px; font-size: 12px;
+            background: #fff; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;
+        }
+        #copyBtn.copied { background: #28a745; color: white; border-color: #28a745; }
+        .footer { margin-top: 1rem; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <h2>📄 代码预览</h2>
+    <div class="header">
+        <input type="text" id="urlInput" placeholder="或输入代码 raw 网址">
+        <button onclick="fetchCode()">加载</button>
+    </div>
+    <div id="status"></div>
+    
+    <div class="code-box" id="codeBox" style="display:none;">
+        <button id="copyBtn" onclick="copyCode()">复制</button>
+        <pre><code id="codeDisplay" class="language-javascript"></code></pre>
+    </div>
+    
+    <div class="footer">
+        用法：<code>?url=https://raw.githubusercontent.com/user/repo/main/file.js</code>
+    </div>
+
+    <!-- 可选：代码高亮脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29/prism.min.js"></script>
+    <script>
+        // 解析 URL 参数
+        function getUrlParam(name) {
+            const params = new URLSearchParams(window.location.search);
+            return params.get(name);
+        }
+
+        // 自动检测语言（简单扩展名判断）
+        function getLanguage(url) {
+            const ext = (url.split('.').pop() || '').toLowerCase();
+            const map = { js: 'javascript', ts: 'typescript', py: 'python', html: 'html', css: 'css', json: 'json', md: 'markdown' };
+            return map[ext] || 'javascript';
+        }
+
+        async function fetchCode(targetUrl) {
+            const url = targetUrl || document.getElementById('urlInput').value.trim();
+            const status = document.getElementById('status');
+            const codeDisplay = document.getElementById('codeDisplay');
+            const codeBox = document.getElementById('codeBox');
+            const copyBtn = document.getElementById('copyBtn');
+            
+            if (!url) { status.textContent = '请输入代码网址'; return; }
+            
+            status.textContent = '加载中...';
+            codeBox.style.display = 'none';
+            copyBtn.classList.remove('copied');
+            copyBtn.textContent = '复制';
+
+            try {
+                // 尝试直接请求（需目标支持 CORS）
+                let res = await fetch(url);
+                
+                // 若失败，尝试 CORS 代理（可选）
+                if (!res.ok) {
+                    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+                    res = await fetch(proxy);
+                }
+                
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                
+                const text = await res.text();
+                const lang = getLanguage(url);
+                
+                codeDisplay.className = `language-${lang}`;
+                codeDisplay.textContent = text;
+                codeBox.style.display = 'block';
+                status.textContent = '';
+                
+                // 高亮（如果加载了 Prism）
+                if (window.Prism) Prism.highlightElement(codeDisplay);
+                
+            } catch (e) {
+                status.textContent = '❌ 获取失败：' + e.message + '（检查 CORS 或网址）';
+                console.error(e);
+            }
+        }
+
+        async function copyCode() {
+            const text = document.getElementById('codeDisplay').textContent;
+            const btn = document.getElementById('copyBtn');
+            try {
+                await navigator.clipboard.writeText(text);
+                btn.classList.add('copied');
+                btn.textContent = '✓ 已复制';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.textContent = '复制';
+                }, 1500);
+            } catch {
+                alert('复制失败，请手动选择复制');
+            }
+        }
+
+        // 页面加载时自动处理 ?url= 参数
+        window.addEventListener('DOMContentLoaded', () => {
+            const url = getUrlParam('url');
+            if (url) {
+                document.getElementById('urlInput').value = url;
+                fetchCode(url);
+            }
+        });
+    </script>
+</body>
+</html>
