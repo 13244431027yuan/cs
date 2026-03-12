@@ -4,10 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>GitHub Code Viewer Pro</title>
-  <!-- Prism 样式 -->
   <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/toolbar/prism-toolbar.min.css" rel="stylesheet"/>
-  <!-- Fuse.js 模糊搜索库 -->
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -17,7 +15,6 @@
     }
     .container { max-width: 1400px; margin: 0 auto; }
     
-    /* 头部 */
     .header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 12px 16px; background: #252526; border-radius: 6px;
@@ -36,8 +33,10 @@
     .btn:disabled { background: #3c3c3c; cursor: not-allowed; opacity: 0.6; }
     .btn-outline { background: transparent; border: 1px solid #0e639c; }
     .btn-outline:hover { background: #0e639c20; }
+    .btn-search { background: #2d5016; }
+    .btn-search:hover { background: #3a6b1c; }
 
-    /* 搜索框 */
+    /* 搜索框 - 按钮触发 */
     .search-box {
       display: flex; gap: 8px; margin-bottom: 12px; align-items: center;
     }
@@ -48,6 +47,13 @@
     }
     .search-input:focus { border-color: #0e639c; }
     .search-input::placeholder { color: #666; }
+    .search-btn {
+      padding: 10px 16px; background: #2d5016; border: none;
+      border-radius: 6px; color: #fff; cursor: pointer; font-size: 13px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .search-btn:hover { background: #3a6b1c; }
+    .search-btn:disabled { background: #3c3c3c; cursor: not-allowed; }
     .search-info {
       font-size: 12px; color: #888; min-width: 80px; text-align: right;
     }
@@ -58,31 +64,39 @@
     }
     .search-clear:hover { background: #505050; }
 
-    /* 搜索结果列表 */
+    /* 搜索结果 - 片段显示 */
     .search-results {
       background: #252526; border-radius: 6px; margin-bottom: 12px;
-      max-height: 200px; overflow-y: auto; display: none;
+      max-height: 250px; overflow-y: auto; display: none;
       border: 1px solid #3c3c3c;
     }
     .search-results.show { display: block; }
     .search-item {
-      padding: 8px 12px; border-bottom: 1px solid #3c3c3c;
-      cursor: pointer; font-size: 13px; display: flex; align-items: center;
-      gap: 8px; transition: background 0.15s;
+      padding: 10px 12px; border-bottom: 1px solid #3c3c3c;
+      cursor: pointer; font-size: 13px; display: flex; flex-direction: column;
+      gap: 4px; transition: background 0.15s;
     }
     .search-item:hover { background: #2d2d30; }
     .search-item.active { background: #0e639c30; border-left: 3px solid #0e639c; }
+    .search-item .line-header {
+      display: flex; align-items: center; gap: 8px; color: #888; font-size: 11px;
+    }
     .search-item .line-num {
-      color: #569cd6; font-family: monospace; min-width: 40px;
+      color: #569cd6; font-family: monospace; background: #1e1e1e;
+      padding: 2px 6px; border-radius: 3px;
     }
-    .search-item .line-content {
-      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      color: #d4d4d4;
+    .search-item .line-score {
+      color: #666; font-size: 10px; margin-left: auto;
     }
-    .search-item .line-content mark {
+    .search-item .line-snippet {
+      color: #d4d4d4; font-family: 'Consolas', monospace;
+      font-size: 12px; line-height: 1.4; word-break: break-all;
+    }
+    .search-item .line-snippet mark {
       background: #dcdcaa50; color: #dcdcaa; padding: 0 2px;
-      border-radius: 2px;
+      border-radius: 2px; font-weight: 600;
     }
+    .search-item .line-snippet .ellipsis { color: #666; }
     .search-empty {
       padding: 20px; text-align: center; color: #666; font-size: 13px;
     }
@@ -103,7 +117,6 @@
     .stat-label { font-size: 11px; color: #888; margin-top: 4px; }
     .stat-sub { font-size: 10px; color: #666; margin-top: 2px; }
 
-    /* 依赖列表 */
     .deps {
       background: #252526; border-radius: 6px; padding: 10px 14px;
       margin-bottom: 12px;
@@ -118,14 +131,12 @@
     .dep-tag.external { color: #4ec9b0; }
     .dep-empty { color: #666; font-size: 12px; font-style: italic; }
 
-    /* 错误/加载 */
     .error {
       background: #5a1d1d; color: #f48771; padding: 12px;
       border-radius: 4px; margin-bottom: 12px; display: none;
     }
     .loading { text-align: center; padding: 30px; color: #888; display: none; }
 
-    /* 代码区域 */
     .code-wrapper {
       position: relative; background: #1e1e1e; border-radius: 6px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3); overflow: hidden;
@@ -150,25 +161,21 @@
     .copy-to-clipboard-button:hover { background: #505050 !important; }
     .copy-to-clipboard-button[data-copy-state="copy-success"] { background: #388a34 !important; }
 
-    /* 搜索高亮行 */
     .search-highlight {
       background: rgba(220, 220, 170, 0.15) !important;
       border-left: 3px solid #dcdcaa !important;
     }
-    .search-match {
-      background: #dcdcaa40; color: #dcdcaa; border-radius: 2px;
-      padding: 0 2px;
-    }
 
-    /* 响应式 */
     @media (max-width: 768px) {
       .header { flex-direction: column; align-items: flex-start; }
       .analysis { grid-template-columns: repeat(2, 1fr); }
-      .search-box { flex-direction: column; }
-      .search-input { width: 100%; }
+      .search-box { flex-wrap: wrap; }
+      .search-input { flex: 1 1 200px; }
     }
     @media (max-width: 480px) {
       .analysis { grid-template-columns: 1fr; }
+      .search-box { flex-direction: column; }
+      .search-btn { width: 100%; justify-content: center; }
     }
   </style>
 </head>
@@ -183,15 +190,18 @@
       </div>
     </div>
 
-    <!-- 搜索框 -->
+    <!-- 搜索框 - 按钮触发 -->
     <div class="search-box">
       <input type="text" class="search-input" id="searchInput" 
-             placeholder="🔍 搜索代码 (支持模糊匹配，按 Enter 跳转，↑↓ 导航)" disabled />
+             placeholder="🔍 输入搜索关键词..." disabled />
+      <button class="search-btn" id="searchBtn" disabled>
+        <span>🔍</span> 搜索
+      </button>
       <button class="search-clear" id="searchClear" disabled>✕</button>
       <div class="search-info" id="searchInfo"></div>
     </div>
 
-    <!-- 搜索结果 -->
+    <!-- 搜索结果 - 片段显示 -->
     <div class="search-results" id="searchResults"></div>
 
     <!-- 分析面板 -->
@@ -212,16 +222,16 @@
         </div>
         <div class="stat-card">
           <div class="stat-value" id="statFunctions">-</div>
-          <div class="stat-label">函数/方法</div>
+          <div class="stat-label">函数</div>
         </div>
         <div class="stat-card danger">
           <div class="stat-value" id="statComplexity">-</div>
           <div class="stat-label">复杂度</div>
-          <div class="stat-sub" id="complexityLevel">计算中...</div>
+          <div class="stat-sub" id="complexityLevel">-</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="statImports">-</div>
-          <div class="stat-label">依赖模块</div>
+          <div class="stat-label">依赖</div>
         </div>
       </div>
 
@@ -287,9 +297,14 @@
       return new URLSearchParams(window.location.search).get(name);
     }
 
-    // ====== 模糊搜索引擎 ======
+    // ====== 模糊搜索引擎 - 优化版 ======
     const SearchEngine = {
-      // 初始化 Fuse.js
+      // 配置
+      SNIPPET_LENGTH: 60,  // 匹配片段前后各显示字符数
+      MAX_RESULTS: 30,     // 最多显示结果数
+      MIN_QUERY_LENGTH: 2, // 最小搜索长度
+
+      // 初始化
       init(code) {
         gCode = code;
         gLines = code.split('\n').map((line, i) => ({
@@ -299,23 +314,24 @@
         
         gFuse = new Fuse(gLines, {
           keys: ['text'],
-          threshold: 0.4,        // 模糊度 0-1，越小越精确
-          distance: 100,         // 匹配距离
-          minMatchCharLength: 2, // 最小匹配字符
-          includeMatches: true,  // 返回匹配位置
-          ignoreLocation: true,  // 忽略位置
-          findAllMatches: true   // 查找所有匹配
+          threshold: 0.5,
+          distance: 100,
+          minMatchCharLength: this.MIN_QUERY_LENGTH,
+          includeMatches: true,
+          ignoreLocation: true,
+          findAllMatches: true,
+          useExtendedSearch: true
         });
       },
 
-      // 搜索
+      // 搜索 - 按钮触发
       search(query) {
-        if (!query || query.length < 2) {
+        if (!query || query.length < this.MIN_QUERY_LENGTH) {
           gSearchResults = [];
           return [];
         }
         const results = gFuse.search(query);
-        gSearchResults = results.map(r => ({
+        gSearchResults = results.slice(0, this.MAX_RESULTS).map(r => ({
           line: r.item.line,
           text: r.item.text,
           score: r.score,
@@ -324,33 +340,57 @@
         return gSearchResults;
       },
 
-      // 高亮匹配文本
-      highlight(text, matches) {
-        if (!matches || matches.length === 0) return text;
+      // 生成匹配片段（不显示整行）
+      createSnippet(text, matches) {
+        if (!matches || matches.length === 0) {
+          // 无匹配时显示开头片段
+          const start = 0;
+          const end = Math.min(this.SNIPPET_LENGTH, text.length);
+          return {
+            prefix: '',
+            content: this.escapeHtml(text.slice(start, end)),
+            suffix: text.length > end ? '...' : ''
+          };
+        }
+
+        // 找到第一个匹配位置
+        const firstMatch = matches[0];
+        const matchStart = firstMatch.indices[0][0];
+        const matchEnd = firstMatch.indices[0][1];
+
+        // 计算片段范围
+        let start = Math.max(0, matchStart - this.SNIPPET_LENGTH);
+        let end = Math.min(text.length, matchEnd + this.SNIPPET_LENGTH);
+
+        const prefix = start > 0 ? '...' : '';
+        const suffix = end < text.length ? '...' : '';
+
+        // 高亮匹配部分
+        let content = this.escapeHtml(text.slice(start, end));
         
-        let result = '';
-        let lastIndex = 0;
-        
+        // 调整高亮位置（考虑切片偏移）
         for (const match of matches) {
-          for (const idx of match.indices) {
-            const [start, end] = idx;
-            result += this.escapeHtml(text.slice(lastIndex, start));
-            result += `<mark class="search-match">${this.escapeHtml(text.slice(start, end + 1))}</mark>`;
-            lastIndex = end + 1;
+          for (const [mStart, mEnd] of match.indices) {
+            if (mStart >= start && mEnd <= end) {
+              const adjStart = mStart - start;
+              const adjEnd = mEnd - start;
+              const before = content.slice(0, adjStart);
+              const matched = content.slice(adjStart, adjEnd + 1);
+              const after = content.slice(adjEnd + 1);
+              content = before + `<mark>${matched}</mark>` + after;
+            }
           }
         }
-        result += this.escapeHtml(text.slice(lastIndex));
-        return result;
+
+        return { prefix, content, suffix };
       },
 
-      // HTML 转义
       escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
       },
 
-      // 清除
       clear() {
         gSearchResults = [];
         gActiveIndex = -1;
@@ -361,7 +401,7 @@
     const CodeAnalyzer = {
       safeAnalyze(code, lang) {
         try { return this.analyze(code, lang); }
-        catch (e) { console.warn('Analysis fallback:', e); return this.defaultStats(code); }
+        catch (e) { return this.defaultStats(code); }
       },
 
       defaultStats(code) {
@@ -372,7 +412,7 @@
           commentPercent: 0,
           size: bytes < 1024 ? `${bytes} B` : bytes < 1024*1024 ? `${(bytes/1024).toFixed(1)} KB` : `${(bytes/1024/1024).toFixed(2)} MB`,
           functions: 0, imports: [],
-          complexity: { score: 0, level: '未知', color: '#888' }
+          complexity: { score: 0, level: '-', color: '#888' }
         };
       },
 
@@ -411,12 +451,10 @@
 
       countFunctions(code, lang) {
         const patterns = {
-          javascript: [/\bfunction\s+\w+/g, /\b(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?\(/g, /=>\s*\{?/g],
+          javascript: [/\bfunction\s+\w+/g, /\b(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?\(/g],
           python: [/\bdef\s+\w+/g],
           java: [/\b(?:public|private|protected|\s)\s*\w+\s+\w+\s*\([^)]*\)\s*\{?/g],
-          php: [/\bfunction\s+\w+/g],
-          go: [/\bfunc\s+(?:\([^)]+\)\s+)?\w+/g],
-          rust: [/\bfn\s+\w+/g]
+          go: [/\bfunc\s+(?:\([^)]+\)\s+)?\w+/g]
         };
         const regs = patterns[lang] || patterns.javascript;
         let count = 0;
@@ -433,8 +471,7 @@
         const deps = new Set();
         const patterns = {
           javascript: [/(?:import|from)\s+['"]([^'"]+)['"]/g, /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g],
-          python: [/^\s*import\s+(\w+)/gm, /^\s*from\s+(\w+)(?:\.\w+)*\s+import/gm],
-          php: [/(?:include|require)\s*['"]([^'"]+)['"]/g]
+          python: [/^\s*import\s+(\w+)/gm, /^\s*from\s+(\w+)(?:\.\w+)*\s+import/gm]
         };
         const regs = patterns[lang] || patterns.javascript;
         for (const re of regs) {
@@ -451,7 +488,7 @@
       },
 
       estimateComplexity(code) {
-        const keywords = ['if', 'else', 'for', 'while', 'switch', 'case', 'catch', '&&', '||', '\\?'];
+        const keywords = ['if', 'else', 'for', 'while', 'switch', 'case', 'catch', '&&', '||'];
         let score = 1;
         for (const kw of keywords) {
           try {
@@ -494,7 +531,7 @@
       const cx = data.complexity || {};
       document.getElementById('statComplexity').textContent = cx.score ?? '-';
       const levelEl = document.getElementById('complexityLevel');
-      levelEl.textContent = cx.level || '未知';
+      levelEl.textContent = cx.level || '-';
       levelEl.style.color = cx.color || '#888';
       
       document.getElementById('statImports').textContent = (data.imports?.length || 0).toString();
@@ -520,7 +557,7 @@
       }
     }
 
-    function renderSearchResults(results, query) {
+    function renderSearchResults(results) {
       const container = document.getElementById('searchResults');
       const infoEl = document.getElementById('searchInfo');
       
@@ -534,12 +571,23 @@
 
       infoEl.innerHTML = `<span class="match">${results.length}</span> 个匹配`;
       
-      container.innerHTML = results.slice(0, 50).map((r, i) => `
-        <div class="search-item ${i === gActiveIndex ? 'active' : ''}" data-index="${i}" data-line="${r.line}">
-          <span class="line-num">L${r.line}</span>
-          <span class="line-content">${SearchEngine.highlight(r.text, r.matches)}</span>
-        </div>
-      `).join('');
+      container.innerHTML = results.map((r, i) => {
+        const snippet = SearchEngine.createSnippet(r.text, r.matches);
+        const scorePercent = Math.round((1 - r.score) * 100);
+        return `
+          <div class="search-item ${i === gActiveIndex ? 'active' : ''}" data-index="${i}" data-line="${r.line}">
+            <div class="line-header">
+              <span class="line-num">L${r.line}</span>
+              <span class="line-score">匹配度 ${scorePercent}%</span>
+            </div>
+            <div class="line-snippet">
+              <span class="ellipsis">${snippet.prefix}</span>
+              ${snippet.content}
+              <span class="ellipsis">${snippet.suffix}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
 
       container.classList.add('show');
       gActiveIndex = 0;
@@ -560,16 +608,13 @@
       const pre = document.querySelector('pre');
       const lineEl = pre.querySelector(`span[data-line="${lineNum}"]`);
       if (lineEl) {
-        // 移除旧高亮
         pre.querySelectorAll('.search-highlight').forEach(el => el.classList.remove('search-highlight'));
-        // 添加新高亮
         const lineWrapper = lineEl.closest('div') || lineEl.parentElement;
         if (lineWrapper) {
           lineWrapper.classList.add('search-highlight');
           lineWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       } else {
-        // 行号元素未渲染，估算位置
         const lineHeight = 20;
         pre.scrollTop = (lineNum - 1) * lineHeight;
       }
@@ -588,11 +633,12 @@
       const toggleBtn = document.getElementById('toggleAnalysis');
       const analysisPanel = document.getElementById('analysisPanel');
       const searchInput = document.getElementById('searchInput');
+      const searchBtn = document.getElementById('searchBtn');
       const searchClear = document.getElementById('searchClear');
       const searchResults = document.getElementById('searchResults');
 
       if (!url) {
-        errorEl.textContent = '❌ 缺少 url 参数\n示例: ?url=https://github.com/owner/repo/blob/main/file.js';
+        errorEl.textContent = '❌ 缺少 url 参数\n示例：?url=https://github.com/owner/repo/blob/main/file.js';
         errorEl.style.display = 'block';
         loading.style.display = 'none';
         return;
@@ -620,7 +666,6 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const code = await res.text();
 
-        // 代码高亮
         codeBlock.textContent = code;
         codeBlock.className = `language-${info.lang}`;
         document.getElementById('codeLang').textContent = info.lang.toUpperCase();
@@ -629,20 +674,18 @@
           Prism.plugins.lineNumbers.resize(codeBlock.parentElement);
         }
 
-        // 分析
         const analysis = CodeAnalyzer.safeAnalyze(code, info.lang);
         renderAnalysis(analysis);
 
-        // ✅ 初始化搜索
+        // 初始化搜索
         SearchEngine.init(code);
         searchInput.disabled = false;
+        searchBtn.disabled = false;
         searchClear.disabled = false;
 
-        // 显示
         codeWrapper.style.display = 'block';
         copyAllBtn.disabled = false;
 
-        // 复制
         copyAllBtn.onclick = async () => {
           try {
             await navigator.clipboard.writeText(code);
@@ -651,35 +694,35 @@
           } catch { alert('复制失败'); }
         };
 
-        // 切换分析
         toggleBtn.onclick = () => {
           gAnalysisVisible = !gAnalysisVisible;
           analysisPanel.style.display = gAnalysisVisible ? 'block' : 'none';
           toggleBtn.textContent = gAnalysisVisible ? '🔽 隐藏分析' : '📊 显示分析';
         };
 
-        // 🔍 搜索事件
-        let searchTimer = null;
-        searchInput.addEventListener('input', (e) => {
-          clearTimeout(searchTimer);
-          searchTimer = setTimeout(() => {
-            const query = e.target.value.trim();
-            if (query.length < 2) {
-              SearchEngine.clear();
-              searchResults.classList.remove('show');
-              document.getElementById('searchInfo').innerHTML = '';
-              // 清除高亮
-              document.querySelector('pre')?.querySelectorAll('.search-highlight').forEach(el => {
-                el.classList.remove('search-highlight');
-              });
-              return;
-            }
-            const results = SearchEngine.search(query);
-            renderSearchResults(results, query);
-          }, 150);
+        // ✅ 按钮触发搜索（非实时）
+        const doSearch = () => {
+          const query = searchInput.value.trim();
+          if (query.length < SearchEngine.MIN_QUERY_LENGTH) {
+            SearchEngine.clear();
+            searchResults.classList.remove('show');
+            document.getElementById('searchInfo').innerHTML = '';
+            return;
+          }
+          const results = SearchEngine.search(query);
+          renderSearchResults(results);
+        };
+
+        searchBtn.onclick = doSearch;
+        
+        // Enter 键也触发搜索
+        searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            doSearch();
+          }
         });
 
-        // 清除搜索
         searchClear.onclick = () => {
           searchInput.value = '';
           SearchEngine.clear();
@@ -691,7 +734,7 @@
           searchInput.focus();
         };
 
-        // 键盘导航
+        // 搜索结果键盘导航
         searchInput.addEventListener('keydown', (e) => {
           if (gSearchResults.length === 0) return;
           
@@ -703,7 +746,7 @@
             e.preventDefault();
             gActiveIndex = Math.max(gActiveIndex - 1, 0);
             updateActiveItem();
-          } else if (e.key === 'Enter') {
+          } else if (e.key === 'Enter' && searchResults.classList.contains('show')) {
             e.preventDefault();
             if (gActiveIndex >= 0 && gSearchResults[gActiveIndex]) {
               jumpToLine(gSearchResults[gActiveIndex].line);
@@ -715,7 +758,6 @@
           }
         });
 
-        // 点击搜索结果
         searchResults.addEventListener('click', (e) => {
           const item = e.target.closest('.search-item');
           if (item) {
@@ -727,7 +769,7 @@
 
       } catch (e) {
         console.error('Load error:', e);
-        errorEl.textContent = `❌ 加载失败: ${e.message}`;
+        errorEl.textContent = `❌ 加载失败：${e.message}`;
         errorEl.style.display = 'block';
         renderAnalysis(CodeAnalyzer.defaultStats(''));
       } finally {
